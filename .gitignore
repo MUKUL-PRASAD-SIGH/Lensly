@@ -1,1 +1,24 @@
+# === Docs (local only) ===
 Docs/
+
+# === Secrets ===
+backend/.env
+*.env
+*.key
+
+# === Android build outputs ===
+android/.gradle/
+android/local.properties
+android/app/build/
+android/build/
+*.apk
+*.aab
+*.keystore
+
+# === Go build ===
+backend/lensly-backend
+backend/lensly-backend.exe
+
+# === OS ===
+.DS_Store
+Thumbs.db

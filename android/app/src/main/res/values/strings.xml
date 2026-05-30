@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Lensly</string>
+    <string name="accessibility_service_description">Lensly reads product listings in shopping apps to help you find the best value. No data is stored or shared.</string>
+</resources>
