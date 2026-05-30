@@ -66,6 +66,14 @@ class OverlayViewModel : ViewModel() {
         _uiState.value = current.previousResults
     }
 
+    fun startLoading() {
+        _uiState.value = OverlayUiState.Loading
+    }
+
+    fun showError(message: String) {
+        _uiState.value = OverlayUiState.Error(message)
+    }
+
     fun dismiss() {
         _uiState.value = OverlayUiState.Idle
     }

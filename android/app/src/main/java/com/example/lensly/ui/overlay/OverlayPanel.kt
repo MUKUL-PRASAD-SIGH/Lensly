@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,6 +49,8 @@ fun OverlayPanel(
     onDismiss: () -> Unit,
     onWhyTap: (RankedProduct) -> Unit,
     onBack: () -> Unit,
+    onQuerySubmit: (String) -> Unit,
+    onVoiceSearchTap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
@@ -76,7 +79,9 @@ fun OverlayPanel(
                 is OverlayUiState.Results -> ResultsPanel(
                     state = uiState,
                     onDismiss = onDismiss,
-                    onWhyTap = onWhyTap
+                    onWhyTap = onWhyTap,
+                    onQuerySubmit = onQuerySubmit,
+                    onVoiceSearchTap = onVoiceSearchTap
                 )
                 is OverlayUiState.Explanation -> ExplanationPanel(
                     state = uiState,
@@ -118,7 +123,9 @@ private fun LoadingPanel() {
 private fun ResultsPanel(
     state: OverlayUiState.Results,
     onDismiss: () -> Unit,
-    onWhyTap: (RankedProduct) -> Unit
+    onWhyTap: (RankedProduct) -> Unit,
+    onQuerySubmit: (String) -> Unit,
+    onVoiceSearchTap: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Header
@@ -138,7 +145,7 @@ private fun ResultsPanel(
             )
         }
 
-        HorizontalDivider(color = SurfaceCardBorder, modifier = Modifier.padding(vertical = 8.dp))
+        HorizontalDivider(color = SurfaceCardBorder, modifier = Modifier.padding(vertical = 4.dp))
 
         // Product cards list
         LazyColumn(
@@ -148,6 +155,103 @@ private fun ResultsPanel(
         ) {
             items(state.ranked) { ranked ->
                 ProductRankCard(ranked = ranked, onWhyTap = onWhyTap)
+            }
+        }
+
+        HorizontalDivider(color = SurfaceCardBorder, modifier = Modifier.padding(vertical = 4.dp))
+
+        // Query input section at the bottom
+        QueryInputSection(
+            onSubmit = onQuerySubmit,
+            onVoiceTap = onVoiceSearchTap
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Query Input Section
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun QueryInputSection(
+    onSubmit: (String) -> Unit,
+    onVoiceTap: () -> Unit
+) {
+    var text by remember { mutableStateOf("") }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(10.dp)
+    ) {
+        // Quick suggestion chips
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(bottom = 6.dp)
+        ) {
+            val suggestions = listOf("Best Value", "Healthy", "Cheapest", "High Protein")
+            suggestions.forEach { suggestion ->
+                SuggestionChip(
+                    onClick = { onSubmit(suggestion) },
+                    label = { Text(suggestion, fontSize = 10.sp, color = TextPrimary) },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = SurfaceCard
+                    ),
+                    border = BorderStroke(0.5.dp, SurfaceCardBorder)
+                )
+            }
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            TextField(
+                value = text,
+                onValueChange = { text = it },
+                placeholder = { Text("Ask Lensly...", fontSize = 11.sp, color = TextSecondary) },
+                singleLine = true,
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp)),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = SurfaceCard,
+                    unfocusedContainerColor = SurfaceCard,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                ),
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                },
+                trailingIcon = {
+                    IconButton(onClick = onVoiceTap, modifier = Modifier.size(24.dp)) {
+                        Text("🎙", fontSize = 14.sp)
+                    }
+                }
+            )
+            IconButton(
+                onClick = {
+                    if (text.isNotBlank()) {
+                        onSubmit(text)
+                        text = ""
+                    }
+                },
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(Purple, CircleShape)
+            ) {
+                Text("➔", color = Color.White, fontSize = 16.sp)
             }
         }
     }
@@ -402,16 +506,27 @@ private fun PanelHeader(
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Logo mark
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .background(Color.White.copy(alpha = 0.15f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("L", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+        if (onBack != null) {
+            TextButton(
+                onClick = onBack,
+                modifier = Modifier.size(36.dp),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Text("←", color = Color.White, fontSize = 20.sp)
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+        } else {
+            // Logo mark
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(Color.White.copy(alpha = 0.15f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("L", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+            }
+            Spacer(modifier = Modifier.width(10.dp))
         }
-        Spacer(modifier = Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             subtitle?.let {

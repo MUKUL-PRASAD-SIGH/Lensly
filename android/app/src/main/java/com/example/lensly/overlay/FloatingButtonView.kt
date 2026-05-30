@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
 
 /**
  * FloatingButtonView — the draggable bubble that triggers the overlay panel.
@@ -33,18 +34,28 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 class FloatingButtonView(
     private val context: Context,
     private val windowManager: WindowManager,
-    private var params: WindowManager.LayoutParams
+    private var params: WindowManager.LayoutParams,
+    private val onBubbleClick: () -> Unit
 ) {
     private val composeView: ComposeView = ComposeView(context).apply {
         setContent {
             FloatingBubble(
-                onTap = { openPanel() },
+                onTap = { onBubbleClick() },
                 onDrag = { dx, dy -> updatePosition(dx, dy) }
             )
         }
     }
 
     init {
+        (context as? androidx.lifecycle.LifecycleOwner)?.let { owner: androidx.lifecycle.LifecycleOwner ->
+            composeView.setViewTreeLifecycleOwner(owner)
+        }
+        (context as? androidx.savedstate.SavedStateRegistryOwner)?.let { owner: androidx.savedstate.SavedStateRegistryOwner ->
+            composeView.setViewTreeSavedStateRegistryOwner(owner)
+        }
+        (context as? androidx.lifecycle.ViewModelStoreOwner)?.let { owner: androidx.lifecycle.ViewModelStoreOwner ->
+            composeView.setViewTreeViewModelStoreOwner(owner)
+        }
         windowManager.addView(composeView, params)
     }
 
@@ -52,10 +63,6 @@ class FloatingButtonView(
         params.x = (params.x - dx).toInt().coerceIn(0, 200)
         params.y = (params.y + dy).toInt().coerceIn(0, 2000)
         windowManager.updateViewLayout(composeView, params)
-    }
-
-    private fun openPanel() {
-        // TODO Phase 3: Show overlay analysis panel
     }
 
     fun remove() {

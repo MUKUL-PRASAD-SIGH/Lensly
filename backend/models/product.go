@@ -49,3 +49,12 @@ const (
 	ObjectiveIngredientAnalysis = "INGREDIENT_ANALYSIS"
 	ObjectiveLongestDuration   = "LONGEST_DURATION"
 )
+
+// AnalyzeResponse is returned with ranked results.
+type AnalyzeResponse struct {
+	RankedProducts []RankedProduct `json:"ranked_products"`
+	Explanation    string          `json:"explanation"`
+	Confidence     float64         `json:"confidence"`
+	UsedAI         bool            `json:"used_ai"`
+}
+

@@ -9,7 +9,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/lensly/backend/handlers"
 	"github.com/lensly/backend/models"
 )
 
@@ -56,10 +55,10 @@ func Rank(
 	products []models.Product,
 	intent models.QueryIntent,
 	prefs models.UserPreferences,
-) (handlers.AnalyzeResponse, error) {
+) (models.AnalyzeResponse, error) {
 	apiKey := os.Getenv("ANTHROPIC_API_KEY")
 	if apiKey == "" {
-		return handlers.AnalyzeResponse{}, fmt.Errorf("ANTHROPIC_API_KEY not set")
+		return models.AnalyzeResponse{}, fmt.Errorf("ANTHROPIC_API_KEY not set")
 	}
 
 	prompt := buildPrompt(products, intent, prefs)
@@ -74,7 +73,7 @@ func Rank(
 
 	body, err := json.Marshal(reqBody)
 	if err != nil {
-		return handlers.AnalyzeResponse{}, err
+		return models.AnalyzeResponse{}, err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec*time.Second)
@@ -82,7 +81,7 @@ func Rank(
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, claudeAPIURL, bytes.NewReader(body))
 	if err != nil {
-		return handlers.AnalyzeResponse{}, err
+		return models.AnalyzeResponse{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", apiKey)
@@ -90,21 +89,21 @@ func Rank(
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return handlers.AnalyzeResponse{}, err
+		return models.AnalyzeResponse{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return handlers.AnalyzeResponse{}, fmt.Errorf("claude API returned %d", resp.StatusCode)
+		return models.AnalyzeResponse{}, fmt.Errorf("claude API returned %d", resp.StatusCode)
 	}
 
 	var claudeResp claudeResponse
 	if err := json.NewDecoder(resp.Body).Decode(&claudeResp); err != nil {
-		return handlers.AnalyzeResponse{}, err
+		return models.AnalyzeResponse{}, err
 	}
 
 	if len(claudeResp.Content) == 0 {
-		return handlers.AnalyzeResponse{}, fmt.Errorf("empty claude response")
+		return models.AnalyzeResponse{}, fmt.Errorf("empty claude response")
 	}
 
 	return parseClaudeResponse(claudeResp.Content[0].Text, products)
@@ -147,10 +146,10 @@ Rules:
 }
 
 // parseClaudeResponse parses Claude's JSON response into an AnalyzeResponse.
-func parseClaudeResponse(text string, products []models.Product) (handlers.AnalyzeResponse, error) {
+func parseClaudeResponse(text string, products []models.Product) (models.AnalyzeResponse, error) {
 	var result claudeRankResult
 	if err := json.Unmarshal([]byte(text), &result); err != nil {
-		return handlers.AnalyzeResponse{}, fmt.Errorf("failed to parse claude response: %w", err)
+		return models.AnalyzeResponse{}, fmt.Errorf("failed to parse claude response: %w", err)
 	}
 
 	// Build a lookup map from product name
@@ -172,7 +171,7 @@ func parseClaudeResponse(text string, products []models.Product) (handlers.Analy
 		})
 	}
 
-	return handlers.AnalyzeResponse{
+	return models.AnalyzeResponse{
 		RankedProducts: ranked,
 		Explanation:    result.Summary,
 		Confidence:     result.Confidence,

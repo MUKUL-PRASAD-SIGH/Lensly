@@ -100,4 +100,7 @@ dependencies {
 
   // ML Kit OCR (fallback screen reader)
   implementation(libs.mlkit.text.recognition)
+
+  // Material Icons Core
+  implementation(libs.androidx.compose.material.icons.core)
 }

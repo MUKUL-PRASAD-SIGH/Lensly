@@ -2,6 +2,7 @@ package com.example.lensly.service
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.graphics.Bitmap
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -9,20 +10,11 @@ import com.example.lensly.models.Product
 import com.example.lensly.models.SourceApp
 import com.example.lensly.parser.ProductParser
 import com.example.lensly.screen.NodeTraverser
+import com.google.gson.Gson
+import java.util.concurrent.Executor
 
 /**
  * LenslyAccessibilityService — the heart of the screen reading layer.
- *
- * Lifecycle:
- *   - Enabled by user in Android Settings → Accessibility
- *   - Receives events when foreground app content changes
- *   - Traverses the UI tree to extract product card data
- *   - Broadcasts extracted products to the overlay layer
- *
- * Privacy:
- *   - Never stores raw screen data
- *   - Only structured product fields (name, price, weight) are extracted
- *   - No data is persisted beyond the current query session
  */
 class LenslyAccessibilityService : AccessibilityService() {
 
@@ -30,6 +22,11 @@ class LenslyAccessibilityService : AccessibilityService() {
         private const val TAG = "LenslyA11y"
         const val ACTION_PRODUCTS_EXTRACTED = "com.example.lensly.PRODUCTS_EXTRACTED"
         const val EXTRA_PRODUCTS_JSON = "products_json"
+
+        // Static instance to allow the overlay service in the same process to call screenshot methods
+        @Volatile
+        var instance: LenslyAccessibilityService? = null
+            private set
 
         // Minimum product cards to trigger an extraction broadcast
         private const val MIN_PRODUCTS_TO_BROADCAST = 2
@@ -41,6 +38,7 @@ class LenslyAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instance = this
         Log.i(TAG, "✅ Lensly Accessibility Service connected")
     }
 
@@ -70,7 +68,7 @@ class LenslyAccessibilityService : AccessibilityService() {
     /**
      * Traverses the active window's node tree and extracts visible product cards.
      */
-    private fun extractProducts(sourceApp: SourceApp) {
+    fun extractProducts(sourceApp: SourceApp) {
         val root = rootInActiveWindow ?: run {
             Log.w(TAG, "Root window unavailable for ${sourceApp.name}")
             return
@@ -94,14 +92,43 @@ class LenslyAccessibilityService : AccessibilityService() {
     }
 
     /**
+     * Captures a screenshot using the Accessibility API (Android 11 / API 30+).
+     */
+    fun captureScreenshot(onBitmapCaptured: (Bitmap?) -> Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            val executor = Executor { command -> command.run() }
+            takeScreenshot(
+                android.view.Display.DEFAULT_DISPLAY,
+                executor,
+                object : TakeScreenshotCallback {
+                    override fun onSuccess(screenshotResult: ScreenshotResult) {
+                        val hardwareBuffer = screenshotResult.hardwareBuffer
+                        val bitmap = Bitmap.wrapHardwareBuffer(hardwareBuffer, screenshotResult.colorSpace)
+                        val softwareBitmap = bitmap?.copy(Bitmap.Config.ARGB_8888, false)
+                        hardwareBuffer.close()
+                        onBitmapCaptured(softwareBitmap)
+                    }
+
+                    override fun onFailure(errorCode: Int) {
+                        Log.e(TAG, "Failed to capture accessibility screenshot: error code $errorCode")
+                        onBitmapCaptured(null)
+                    }
+                }
+            )
+        } else {
+            Log.w(TAG, "Accessibility screenshot API requires Android 11+ (API 30)")
+            onBitmapCaptured(null)
+        }
+    }
+
+    /**
      * Broadcasts extracted products as a local intent to the overlay service.
      */
     private fun broadcastProducts(products: List<Product>) {
         val intent = Intent(ACTION_PRODUCTS_EXTRACTED).apply {
             setPackage(packageName)
-            // Serialize product list to JSON string for IPC
-            // In a real build, use kotlinx.serialization or Gson
-            putExtra(EXTRA_PRODUCTS_JSON, products.toString())
+            // Serialize product list to JSON string via Gson
+            putExtra(EXTRA_PRODUCTS_JSON, Gson().toJson(products))
         }
         sendBroadcast(intent)
     }
@@ -112,6 +139,12 @@ class LenslyAccessibilityService : AccessibilityService() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         Log.i(TAG, "Accessibility service unbound")
+        instance = null
         return super.onUnbind(intent)
+    }
+
+    override fun onDestroy() {
+        instance = null
+        super.onDestroy()
     }
 }

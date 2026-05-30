@@ -15,14 +15,6 @@ type AnalyzeRequest struct {
 	UserPreferences models.UserPreferences  `json:"user_preferences"`
 }
 
-// AnalyzeResponse is returned with ranked results.
-type AnalyzeResponse struct {
-	RankedProducts []models.RankedProduct `json:"ranked_products"`
-	Explanation    string                 `json:"explanation"`
-	Confidence     float64                `json:"confidence"`
-	UsedAI         bool                   `json:"used_ai"`
-}
-
 // Analyze handles POST /api/v1/analyze
 // Receives structured product JSON from the Android app and returns ranked results.
 // Invokes Claude API only when the query requires reasoning beyond deterministic math.
@@ -43,8 +35,9 @@ func Analyze(w http.ResponseWriter, r *http.Request) {
 	// Route: simple value queries use deterministic ranking; complex queries use Claude.
 	needsAI := requiresAIReasoning(req.QueryIntent)
 
-	var resp AnalyzeResponse
+	var resp models.AnalyzeResponse
 	var err error
+
 
 	if needsAI {
 		resp, err = claude.Rank(req.Products, req.QueryIntent, req.UserPreferences)
@@ -88,7 +81,7 @@ func requiresAIReasoning(intent models.QueryIntent) bool {
 }
 
 // deterministicRank ranks products by price-per-unit without AI.
-func deterministicRank(products []models.Product, intent models.QueryIntent) AnalyzeResponse {
+func deterministicRank(products []models.Product, intent models.QueryIntent) models.AnalyzeResponse {
 	ranked := make([]models.RankedProduct, len(products))
 	for i, p := range products {
 		score := 0.0
@@ -125,7 +118,7 @@ func deterministicRank(products []models.Product, intent models.QueryIntent) Ana
 	}
 
 	best := ranked[0]
-	return AnalyzeResponse{
+	return models.AnalyzeResponse{
 		RankedProducts: ranked,
 		Explanation:    "Ranked by " + best.Metric + ". Best value: " + best.Product.Name,
 		Confidence:     1.0,
