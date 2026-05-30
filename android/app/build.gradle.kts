@@ -2,6 +2,7 @@ plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
+  alias(libs.plugins.ksp)
 }
 
 android {
@@ -81,4 +82,22 @@ dependencies {
   implementation(libs.androidx.navigation3.ui)
   implementation(libs.androidx.navigation3.runtime)
   implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+
+  // Networking — Retrofit + OkHttp
+  implementation(libs.retrofit.core)
+  implementation(libs.retrofit.gson)
+  implementation(libs.okhttp.core)
+  implementation(libs.okhttp.logging)
+  implementation(libs.gson)
+
+  // Coroutines
+  implementation(libs.kotlinx.coroutines.android)
+
+  // Room DB (local storage)
+  implementation(libs.room.runtime)
+  implementation(libs.room.ktx)
+  ksp(libs.room.compiler)
+
+  // ML Kit OCR (fallback screen reader)
+  implementation(libs.mlkit.text.recognition)
 }
