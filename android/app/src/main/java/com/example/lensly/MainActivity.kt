@@ -34,14 +34,21 @@ import com.example.lensly.theme.LenslyTheme
  */
 class MainActivity : ComponentActivity() {
 
+    private var hasOverlayPermission by mutableStateOf(false)
+    private var hasAccessibilityEnabled by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Load API Key from preferences
+        val prefs = getSharedPreferences("lensly_prefs", MODE_PRIVATE)
+        com.example.lensly.network.ApiClient.userApiKey = prefs.getString("anthropic_api_key", null)
 
         setContent {
             LenslyTheme {
                 OnboardingScreen(
-                    hasOverlayPermission = Settings.canDrawOverlays(this),
-                    hasAccessibilityEnabled = isAccessibilityEnabled(),
+                    hasOverlayPermission = hasOverlayPermission,
+                    hasAccessibilityEnabled = hasAccessibilityEnabled,
                     onRequestOverlay = { requestOverlayPermission() },
                     onRequestAccessibility = { openAccessibilitySettings() },
                     onStartApp = { startOverlayService() }
@@ -52,8 +59,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Refresh permission state when user returns from settings
-        if (Settings.canDrawOverlays(this) && isAccessibilityEnabled()) {
+        hasOverlayPermission = Settings.canDrawOverlays(this)
+        hasAccessibilityEnabled = isAccessibilityEnabled()
+        
+        if (hasOverlayPermission && hasAccessibilityEnabled) {
             startOverlayService()
         }
     }
@@ -71,12 +80,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun isAccessibilityEnabled(): Boolean {
-        val service = "$packageName/com.example.lensly.service.LenslyAccessibilityService"
-        val enabledServices = Settings.Secure.getString(
-            contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ) ?: return false
-        return enabledServices.contains(service)
+        val am = getSystemService(android.content.Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager
+        val enabledServices = am.getEnabledAccessibilityServiceList(android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+        for (enabledService in enabledServices) {
+            val enabledServiceInfo = enabledService.resolveInfo.serviceInfo
+            if (enabledServiceInfo.packageName == packageName && 
+                enabledServiceInfo.name == "com.example.lensly.service.LenslyAccessibilityService") {
+                return true
+            }
+        }
+        return false
     }
 
     private fun startOverlayService() {

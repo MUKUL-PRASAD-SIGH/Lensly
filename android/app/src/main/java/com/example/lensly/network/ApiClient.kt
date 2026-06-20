@@ -16,6 +16,10 @@ import java.util.concurrent.TimeUnit
  */
 object ApiClient {
 
+    // Dynamic user-provided Anthropic API key, loaded from SharedPreferences
+    @Volatile
+    var userApiKey: String? = null
+
     // 10.0.2.2 = Android emulator's loopback to host machine
     // Replace with your Railway/Fly.io URL in production
     private const val BASE_URL_DEV = "http://10.0.2.2:8080/"
@@ -35,11 +39,17 @@ object ApiClient {
         .addInterceptor(loggingInterceptor)
         .addInterceptor { chain ->
             // Add common headers to every request
-            val request = chain.request().newBuilder()
+            val builder = chain.request().newBuilder()
                 .addHeader("Content-Type", "application/json")
                 .addHeader("X-App-Version", "1.0.0")
-                .build()
-            chain.proceed(request)
+            
+            // Add user-provided API key if available
+            val key = userApiKey
+            if (!key.isNullOrBlank()) {
+                builder.addHeader("X-Anthropic-API-Key", key)
+            }
+            
+            chain.proceed(builder.build())
         }
         .build()
 

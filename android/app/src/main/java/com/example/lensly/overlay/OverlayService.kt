@@ -30,6 +30,8 @@ import com.example.lensly.service.LenslyAccessibilityService
 import com.example.lensly.ui.overlay.OverlayPanel
 import com.example.lensly.ui.overlay.OverlayViewModel
 import com.example.lensly.ui.overlay.OverlayUiState
+import com.example.lensly.db.AppDatabase
+import com.example.lensly.planner.IntentClassifier
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CoroutineScope
@@ -75,7 +77,9 @@ class OverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStat
 
     // Lazy initialization of OverlayViewModel
     private val viewModel by lazy {
-        ViewModelProvider(this, ViewModelProvider.NewInstanceFactory())[OverlayViewModel::class.java]
+        val dao = AppDatabase.getDatabase(this).queryHistoryDao()
+        val classifier: com.example.lensly.planner.IntentClassifier = com.example.lensly.planner.FallbackIntentClassifier(this)
+        ViewModelProvider(this, OverlayViewModel.Factory(dao, classifier))[OverlayViewModel::class.java]
     }
 
     // Stores the latest products detected on screen via accessibility service
@@ -108,12 +112,26 @@ class OverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStat
     }
 
     override fun onCreate() {
+        // Load API Key from preferences
+        val prefs = getSharedPreferences("lensly_prefs", MODE_PRIVATE)
+        com.example.lensly.network.ApiClient.userApiKey = prefs.getString("anthropic_api_key", null)
+
         savedStateController.performRestore(null)
         super.onCreate()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        startForeground(NOTIFICATION_ID, buildNotification())
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                buildNotification(),
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, buildNotification())
+        }
         showFloatingButton()
 
         // Register the broadcast receiver
@@ -152,7 +170,14 @@ class OverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStat
             y = 300
         }
 
-        floatingButtonView = FloatingButtonView(this, windowManager, params) {
+        floatingButtonView = FloatingButtonView(
+            context = this,
+            windowManager = windowManager,
+            params = params,
+            lifecycleOwner = this,
+            savedStateRegistryOwner = this,
+            viewModelStoreOwner = this
+        ) {
             togglePanel()
         }
         isFloatingButtonShowing = true
@@ -195,8 +220,10 @@ class OverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStat
             
             setContent {
                 val uiState by viewModel.uiState.collectAsState()
+                val recentQueries by viewModel.recentQueries.collectAsState()
                 OverlayPanel(
                     uiState = uiState,
+                    recentQueries = recentQueries,
                     onDismiss = { hidePanel() },
                     onWhyTap = { viewModel.showExplanation(it) },
                     onBack = { viewModel.backToResults() },
@@ -208,7 +235,6 @@ class OverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStat
 
         windowManager.addView(panelView, params)
         isPanelShowing = true
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
     }
 
     private fun hidePanel() {
@@ -218,7 +244,6 @@ class OverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStat
         }
         isPanelShowing = false
         viewModel.dismiss()
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
     }
 
     /**
@@ -335,6 +360,8 @@ class OverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStat
         hidePanel()
         hideFloatingButton()
         serviceScope.cancel()
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         store.clear()
         super.onDestroy()

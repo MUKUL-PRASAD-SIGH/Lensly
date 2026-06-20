@@ -14,6 +14,9 @@
     <!-- Voice input -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Foreground service notifications -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Screen capture via MediaProjection (OCR fallback) -->
     <!-- No permission tag needed; prompted at runtime via MediaProjectionManager -->
 

@@ -37,6 +37,9 @@ android {
       resources {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
       }
+      jniLibs {
+        useLegacyPackaging = false
+      }
     }
 }
 
@@ -103,4 +106,8 @@ dependencies {
 
   // Material Icons Core
   implementation(libs.androidx.compose.material.icons.core)
+
+  // TensorFlow Lite Intent Classifier
+  implementation(libs.tensorflow.lite)
+  implementation(libs.tensorflow.lite.support)
 }

@@ -1,13 +1,12 @@
 package com.example.lensly.overlay
 
 import android.content.Context
-import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -35,27 +34,26 @@ class FloatingButtonView(
     private val context: Context,
     private val windowManager: WindowManager,
     private var params: WindowManager.LayoutParams,
+    private val lifecycleOwner: androidx.lifecycle.LifecycleOwner,
+    private val savedStateRegistryOwner: androidx.savedstate.SavedStateRegistryOwner,
+    private val viewModelStoreOwner: androidx.lifecycle.ViewModelStoreOwner,
     private val onBubbleClick: () -> Unit
 ) {
-    private val composeView: ComposeView = ComposeView(context).apply {
-        setContent {
+    private val composeView: ComposeView = ComposeView(context)
+
+    init {
+        // Set owners BEFORE setContent so the first composition has a valid lifecycle
+        composeView.setViewTreeLifecycleOwner(lifecycleOwner)
+        composeView.setViewTreeSavedStateRegistryOwner(savedStateRegistryOwner)
+        composeView.setViewTreeViewModelStoreOwner(viewModelStoreOwner)
+
+        composeView.setContent {
             FloatingBubble(
                 onTap = { onBubbleClick() },
                 onDrag = { dx, dy -> updatePosition(dx, dy) }
             )
         }
-    }
 
-    init {
-        (context as? androidx.lifecycle.LifecycleOwner)?.let { owner: androidx.lifecycle.LifecycleOwner ->
-            composeView.setViewTreeLifecycleOwner(owner)
-        }
-        (context as? androidx.savedstate.SavedStateRegistryOwner)?.let { owner: androidx.savedstate.SavedStateRegistryOwner ->
-            composeView.setViewTreeSavedStateRegistryOwner(owner)
-        }
-        (context as? androidx.lifecycle.ViewModelStoreOwner)?.let { owner: androidx.lifecycle.ViewModelStoreOwner ->
-            composeView.setViewTreeViewModelStoreOwner(owner)
-        }
         windowManager.addView(composeView, params)
     }
 
@@ -84,10 +82,18 @@ fun FloatingBubble(
                 color = Color(0xFF6C63FF),
                 shape = CircleShape
             )
+            // Tap handler — must be FIRST so it captures short press before drag steals it
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { if (!isDragging) onTap() }
+                )
+            }
+            // Drag handler — separate pointerInput block
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragStart = { isDragging = true },
                     onDragEnd = { isDragging = false },
+                    onDragCancel = { isDragging = false },
                     onDrag = { _, dragAmount ->
                         onDrag(dragAmount.x, dragAmount.y)
                     }

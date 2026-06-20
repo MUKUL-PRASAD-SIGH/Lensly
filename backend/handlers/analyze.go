@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 
 	"github.com/lensly/backend/claude"
 	"github.com/lensly/backend/models"
@@ -35,12 +36,16 @@ func Analyze(w http.ResponseWriter, r *http.Request) {
 	// Route: simple value queries use deterministic ranking; complex queries use Claude.
 	needsAI := requiresAIReasoning(req.QueryIntent)
 
+	apiKey := r.Header.Get("X-Anthropic-API-Key")
+	if apiKey == "" {
+		apiKey = os.Getenv("ANTHROPIC_API_KEY")
+	}
+
 	var resp models.AnalyzeResponse
 	var err error
 
-
 	if needsAI {
-		resp, err = claude.Rank(req.Products, req.QueryIntent, req.UserPreferences)
+		resp, err = claude.Rank(req.Products, req.QueryIntent, req.UserPreferences, apiKey)
 		if err != nil {
 			// Graceful degradation: fall back to rule-based ranking
 			resp = deterministicRank(req.Products, req.QueryIntent)

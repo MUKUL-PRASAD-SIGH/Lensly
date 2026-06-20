@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/lensly/backend/models"
@@ -55,8 +54,8 @@ func Rank(
 	products []models.Product,
 	intent models.QueryIntent,
 	prefs models.UserPreferences,
+	apiKey string,
 ) (models.AnalyzeResponse, error) {
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
 	if apiKey == "" {
 		return models.AnalyzeResponse{}, fmt.Errorf("ANTHROPIC_API_KEY not set")
 	}

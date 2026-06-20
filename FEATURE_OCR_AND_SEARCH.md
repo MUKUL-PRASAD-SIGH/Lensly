@@ -32,6 +32,15 @@ This document logs the implementation of the advanced features for Lensly, inclu
 - Included suggestion chips (`Best Value`, `Healthy`, etc.) to trigger quick-actions.
 - Integrated voice recognition triggering native Android `SpeechRecognizer` speech-to-text.
 
+### 7. Local Search History (Room Database)
+- Integrated Room Database for storing user queries locally.
+- Added a `QueryHistoryDao` and enforced a strict limit of 20 queries (old queries are discarded) to maintain UI performance and keep the interface clean.
+
+### 8. Intent Classification via TFLite (with Regex Fallback)
+- Migrated intent detection architecture to support offline TensorFlow Lite (`.tflite`) inference.
+- Created `IntentClassifier.kt` which attempts to load a placeholder `intent_model.tflite`.
+- Implemented a robust fallback mechanism: if the TFLite model fails (as intended with the dummy model), it seamlessly falls back to the deterministic Regex matcher, ensuring zero UI disruption while allowing future model drop-ins.
+
 ---
 
 ## 📂 New & Modified Files

@@ -46,6 +46,7 @@ private val FakeDiscountRed = Color(0xFFFF4757)
 @Composable
 fun OverlayPanel(
     uiState: OverlayUiState,
+    recentQueries: List<String> = emptyList(),
     onDismiss: () -> Unit,
     onWhyTap: (RankedProduct) -> Unit,
     onBack: () -> Unit,
@@ -53,6 +54,8 @@ fun OverlayPanel(
     onVoiceSearchTap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showSettings by remember { mutableStateOf(false) }
+
     AnimatedVisibility(
         visible = uiState !is OverlayUiState.Idle,
         enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(),
@@ -74,15 +77,23 @@ fun OverlayPanel(
                     shape = RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp)
                 )
         ) {
-            when (uiState) {
-                is OverlayUiState.Loading -> LoadingPanel()
-                is OverlayUiState.Results -> ResultsPanel(
-                    state = uiState,
-                    onDismiss = onDismiss,
-                    onWhyTap = onWhyTap,
-                    onQuerySubmit = onQuerySubmit,
-                    onVoiceSearchTap = onVoiceSearchTap
+            if (showSettings) {
+                SettingsPanel(
+                    onClose = { showSettings = false },
+                    context = androidx.compose.ui.platform.LocalContext.current
                 )
+            } else {
+                when (uiState) {
+                    is OverlayUiState.Loading -> LoadingPanel()
+                    is OverlayUiState.Results -> ResultsPanel(
+                        state = uiState,
+                        recentQueries = recentQueries,
+                        onDismiss = onDismiss,
+                        onWhyTap = onWhyTap,
+                        onQuerySubmit = onQuerySubmit,
+                        onVoiceSearchTap = onVoiceSearchTap,
+                        onSettingsTap = { showSettings = true }
+                    )
                 is OverlayUiState.Explanation -> ExplanationPanel(
                     state = uiState,
                     onBack = onBack,
@@ -93,6 +104,7 @@ fun OverlayPanel(
                     onDismiss = onDismiss
                 )
                 else -> {}
+                }
             }
         }
     }
@@ -122,16 +134,19 @@ private fun LoadingPanel() {
 @Composable
 private fun ResultsPanel(
     state: OverlayUiState.Results,
+    recentQueries: List<String>,
     onDismiss: () -> Unit,
     onWhyTap: (RankedProduct) -> Unit,
     onQuerySubmit: (String) -> Unit,
-    onVoiceSearchTap: () -> Unit
+    onVoiceSearchTap: () -> Unit,
+    onSettingsTap: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Header
         PanelHeader(
             title = "Best Value",
             subtitle = if (state.usedAi) "AI-enhanced ranking" else "Value ranking",
+            onSettingsTap = onSettingsTap,
             onDismiss = onDismiss
         )
 
@@ -162,6 +177,7 @@ private fun ResultsPanel(
 
         // Query input section at the bottom
         QueryInputSection(
+            recentQueries = recentQueries,
             onSubmit = onQuerySubmit,
             onVoiceTap = onVoiceSearchTap
         )
@@ -174,6 +190,7 @@ private fun ResultsPanel(
 
 @Composable
 private fun QueryInputSection(
+    recentQueries: List<String>,
     onSubmit: (String) -> Unit,
     onVoiceTap: () -> Unit
 ) {
@@ -192,7 +209,8 @@ private fun QueryInputSection(
                 .horizontalScroll(rememberScrollState())
                 .padding(bottom = 6.dp)
         ) {
-            val suggestions = listOf("Best Value", "Healthy", "Cheapest", "High Protein")
+            val defaultSuggestions = listOf("Best Value", "Healthy", "Cheapest", "High Protein")
+            val suggestions = if (recentQueries.isNotEmpty()) recentQueries else defaultSuggestions
             suggestions.forEach { suggestion ->
                 SuggestionChip(
                     onClick = { onSubmit(suggestion) },
@@ -494,6 +512,7 @@ private fun PanelHeader(
     title: String,
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
+    onSettingsTap: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     Row(
@@ -533,8 +552,83 @@ private fun PanelHeader(
                 Text(it, color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
             }
         }
+        if (onSettingsTap != null) {
+            IconButton(onClick = onSettingsTap, modifier = Modifier.size(28.dp)) {
+                Text("⚙", color = Color.White, fontSize = 16.sp)
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+        }
         IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
             Icon(Icons.Default.Close, "Close", tint = Color.White.copy(alpha = 0.8f))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Settings Panel (BYOK Key Configuration)
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun SettingsPanel(
+    onClose: () -> Unit,
+    context: android.content.Context
+) {
+    val prefs = remember { context.getSharedPreferences("lensly_prefs", android.content.Context.MODE_PRIVATE) }
+    var keyText by remember { mutableStateOf(prefs.getString("anthropic_api_key", "") ?: "") }
+    
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Settings", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Default.Close, "Close", tint = TextSecondary)
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Anthropic API Key", color = TextSecondary, fontSize = 13.sp)
+        Spacer(modifier = Modifier.height(6.dp))
+        
+        TextField(
+            value = keyText,
+            onValueChange = { keyText = it },
+            placeholder = { Text("sk-ant-api03-...", color = TextSecondary.copy(alpha = 0.5f), fontSize = 12.sp) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = SurfaceCard,
+                unfocusedContainerColor = SurfaceCard,
+                focusedTextColor = TextPrimary,
+                unfocusedTextColor = TextPrimary,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            )
+        )
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            "Enter your personal API key to unlock AI-based product ranking. Leave blank to use server default key.",
+            color = TextSecondary,
+            fontSize = 11.sp,
+            lineHeight = 16.sp
+        )
+        
+        Spacer(modifier = Modifier.weight(1f))
+        
+        Button(
+            onClick = {
+                prefs.edit().putString("anthropic_api_key", keyText.trim()).apply()
+                com.example.lensly.network.ApiClient.userApiKey = keyText.trim().ifEmpty { null }
+                onClose()
+            },
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Purple),
+            shape = RoundedCornerShape(10.dp)
+        ) {
+            Text("Save & Apply", color = Color.White, fontWeight = FontWeight.Bold)
         }
     }
 }

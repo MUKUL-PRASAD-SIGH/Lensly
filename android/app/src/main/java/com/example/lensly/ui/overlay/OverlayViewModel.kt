@@ -9,6 +9,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+import androidx.lifecycle.ViewModelProvider
+import com.example.lensly.db.QueryHistoryDao
+import com.example.lensly.db.QueryHistoryEntity
+import com.example.lensly.planner.IntentClassifier
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+
 /**
  * OverlayViewModel — drives the overlay panel UI state.
  *
@@ -17,12 +25,19 @@ import kotlinx.coroutines.launch
  *   RESULTS → EXPLANATION (when user taps "Why?")
  *   Any state → IDLE (on dismiss)
  */
-class OverlayViewModel : ViewModel() {
+class OverlayViewModel(
+    private val queryHistoryDao: QueryHistoryDao,
+    private val intentClassifier: IntentClassifier
+) : ViewModel() {
 
     private val repository = AnalysisRepository()
 
     private val _uiState = MutableStateFlow<OverlayUiState>(OverlayUiState.Idle)
     val uiState: StateFlow<OverlayUiState> = _uiState.asStateFlow()
+
+    val recentQueries: StateFlow<List<String>> = queryHistoryDao.getRecentQueries()
+        .map { list -> list.map { it.query } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private var _lastProducts: List<Product> = emptyList()
 
@@ -38,6 +53,10 @@ class OverlayViewModel : ViewModel() {
         val intent = buildIntent(rawQuery)
 
         viewModelScope.launch {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                queryHistoryDao.insertQuery(QueryHistoryEntity(query = rawQuery, timestampMs = System.currentTimeMillis()))
+                queryHistoryDao.deleteOldQueries()
+            }
             val result = repository.analyze(products, intent)
             _uiState.value = when (result) {
                 is AnalysisRepository.AnalysisResult.Success -> OverlayUiState.Results(
@@ -79,18 +98,17 @@ class OverlayViewModel : ViewModel() {
     }
 
     private fun buildIntent(rawQuery: String): QueryIntent {
-        val objective = when {
-            rawQuery.contains("health", ignoreCase = true) -> Objective.MAXIMIZE_HEALTH_SCORE
-            rawQuery.contains("cheap", ignoreCase = true) ||
-                rawQuery.contains("price", ignoreCase = true) -> Objective.MINIMIZE_PRICE_PER_UNIT
-            rawQuery.contains("last", ignoreCase = true) -> Objective.LONGEST_DURATION
-            else -> Objective.BEST_VALUE
+        return intentClassifier.classify(rawQuery)
+    }
+
+    class Factory(
+        private val dao: QueryHistoryDao,
+        private val classifier: IntentClassifier
+    ) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            return OverlayViewModel(dao, classifier) as T
         }
-        return QueryIntent(
-            objective = objective,
-            category = "general",
-            rawQuery = rawQuery
-        )
     }
 }
 

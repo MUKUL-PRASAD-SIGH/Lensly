@@ -57,7 +57,8 @@ data class QueryIntent(
     val objective: Objective,
     val category: String,           // "toothpaste", "protein_powder"
     val maxPriceInr: Double? = null,
-    val rawQuery: String = ""
+    val rawQuery: String = "",
+    val confidence: Double = 1.0
 )
 
 enum class Objective {
