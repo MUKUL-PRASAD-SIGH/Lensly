@@ -53,21 +53,25 @@ class OverlayViewModel(
         val intent = buildIntent(rawQuery)
 
         viewModelScope.launch {
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                queryHistoryDao.insertQuery(QueryHistoryEntity(query = rawQuery, timestampMs = System.currentTimeMillis()))
-                queryHistoryDao.deleteOldQueries()
-            }
-            val result = repository.analyze(products, intent)
-            _uiState.value = when (result) {
-                is AnalysisRepository.AnalysisResult.Success -> OverlayUiState.Results(
-                    ranked = result.ranked,
-                    explanation = result.explanation,
-                    usedAi = result.usedAi
-                )
-                is AnalysisRepository.AnalysisResult.Error ->
-                    OverlayUiState.Error(result.message)
-                AnalysisRepository.AnalysisResult.Loading ->
-                    OverlayUiState.Loading
+            try {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    queryHistoryDao.insertQuery(QueryHistoryEntity(query = rawQuery, timestampMs = System.currentTimeMillis()))
+                    queryHistoryDao.deleteOldQueries()
+                }
+                val result = repository.analyze(products, intent)
+                _uiState.value = when (result) {
+                    is AnalysisRepository.AnalysisResult.Success -> OverlayUiState.Results(
+                        ranked = result.ranked,
+                        explanation = result.explanation,
+                        usedAi = result.usedAi
+                    )
+                    is AnalysisRepository.AnalysisResult.Error ->
+                        OverlayUiState.Error(result.message)
+                    AnalysisRepository.AnalysisResult.Loading ->
+                        OverlayUiState.Loading
+                }
+            } catch (e: Exception) {
+                _uiState.value = OverlayUiState.Error("Analysis failed: ${e.message}")
             }
         }
     }

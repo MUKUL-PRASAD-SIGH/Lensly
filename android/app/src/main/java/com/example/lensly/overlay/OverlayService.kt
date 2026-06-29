@@ -176,7 +176,8 @@ class OverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStat
             params = params,
             lifecycleOwner = this,
             savedStateRegistryOwner = this,
-            viewModelStoreOwner = this
+            viewModelStoreOwner = this,
+            viewModel = viewModel
         ) {
             togglePanel()
         }
@@ -253,7 +254,7 @@ class OverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStat
      */
     private fun triggerAnalysis(query: String = "best value") {
         viewModel.startLoading()
-        
+
         if (latestProducts.isNotEmpty()) {
             Log.d(TAG, "Analyzing existing accessibility products list")
             viewModel.analyze(latestProducts, query)
@@ -261,21 +262,34 @@ class OverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStat
             Log.d(TAG, "Accessibility list is empty, falling back to OCR screenshot")
             val service = LenslyAccessibilityService.instance
             if (service != null) {
-                service.captureScreenshot { bitmap ->
-                    if (bitmap != null) {
-                        serviceScope.launch {
-                            val products = withContext(Dispatchers.Default) {
-                                OcrParser.parseFromBitmap(bitmap)
+                // IMPORTANT: Hide panel before screenshot so it doesn't obstruct the app
+                panelView?.visibility = android.view.View.INVISIBLE
+                // Small delay to let the panel disappear from the frame buffer
+                serviceScope.launch {
+                    kotlinx.coroutines.delay(150)
+                    service.captureScreenshot { bitmap ->
+                        // Make panel visible again immediately
+                        panelView?.visibility = android.view.View.VISIBLE
+                        if (bitmap != null) {
+                            serviceScope.launch {
+                                try {
+                                    val products = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                                        OcrParser.parseFromBitmap(bitmap)
+                                    }
+                                    if (products.isNotEmpty()) {
+                                        latestProducts = products
+                                        viewModel.analyze(products, query)
+                                    } else {
+                                        viewModel.showError("No products detected on screen via OCR")
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "OCR crashed", e)
+                                    viewModel.showError("OCR Processing Failed: ${e.message}")
+                                }
                             }
-                            if (products.isNotEmpty()) {
-                                latestProducts = products
-                                viewModel.analyze(products, query)
-                            } else {
-                                viewModel.showError("No products detected on screen via OCR")
-                            }
+                        } else {
+                            viewModel.showError("Failed to capture screenshot. Make sure Accessibility is enabled.")
                         }
-                    } else {
-                        viewModel.showError("Failed to capture screenshot. Make sure Accessibility is enabled.")
                     }
                 }
             } else {

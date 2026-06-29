@@ -29,7 +29,7 @@ enum class SIUnit { GRAM, MILLILITER, UNIT }
 
 /** Shopping apps we support in V1. */
 enum class SourceApp(val packageName: String) {
-    ZEPTO("com.application.zomato"),
+    ZEPTO("com.zeptoconsumerapp"),
     BLINKIT("com.blinkit.consumer"),
     INSTAMART("in.swiggy.android"),
     AMAZON("com.amazon.mShop.android.shopping"),

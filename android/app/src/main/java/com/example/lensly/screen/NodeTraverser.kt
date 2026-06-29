@@ -46,11 +46,11 @@ object NodeTraverser {
     ) {
         val subtreeText = extractTextFromSubtree(node)
 
-        // A card candidate must have price + weight info in its subtree
+        // A card candidate must have a price in its subtree and a reasonable child count.
+        // Weight is a bonus signal but NOT required — many apps embed it in the product name.
         val hasPrice = pricePattern.containsMatchIn(subtreeText)
-        val hasWeight = weightPattern.containsMatchIn(subtreeText)
 
-        if (hasPrice && hasWeight && node.childCount in 2..15) {
+        if (hasPrice && node.childCount in 2..25) {
             results.add(node)
             return  // Don't recurse into confirmed cards to avoid duplicates
         }

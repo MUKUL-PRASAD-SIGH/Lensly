@@ -20,6 +20,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
+import com.example.lensly.ui.overlay.OverlayViewModel
 
 /**
  * FloatingButtonView — the draggable bubble that triggers the overlay panel.
@@ -37,6 +44,7 @@ class FloatingButtonView(
     private val lifecycleOwner: androidx.lifecycle.LifecycleOwner,
     private val savedStateRegistryOwner: androidx.savedstate.SavedStateRegistryOwner,
     private val viewModelStoreOwner: androidx.lifecycle.ViewModelStoreOwner,
+    private val viewModel: com.example.lensly.ui.overlay.OverlayViewModel,
     private val onBubbleClick: () -> Unit
 ) {
     private val composeView: ComposeView = ComposeView(context)
@@ -49,6 +57,7 @@ class FloatingButtonView(
 
         composeView.setContent {
             FloatingBubble(
+                viewModel = viewModel,
                 onTap = { onBubbleClick() },
                 onDrag = { dx, dy -> updatePosition(dx, dy) }
             )
@@ -71,41 +80,55 @@ class FloatingButtonView(
 @Composable
 fun FloatingBubble(
     onTap: () -> Unit,
-    onDrag: (Float, Float) -> Unit
+    onDrag: (Float, Float) -> Unit,
+    viewModel: OverlayViewModel
 ) {
-    var isDragging by remember { mutableStateOf(false) }
+    val uiState by viewModel.uiState.collectAsState()
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    // Scale down slightly when pressed for visual feedback
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.85f else 1f,
+        label = "bubbleScale"
+    )
 
     Box(
         modifier = Modifier
             .size(56.dp)
+            .scale(scale)
             .background(
                 color = Color(0xFF6C63FF),
                 shape = CircleShape
             )
-            // Tap handler — must be FIRST so it captures short press before drag steals it
+            // standard clickable gives us proper ripple and click handling
+            .clickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
+                onClick = onTap
+            )
+            // detectDragGestures plays perfectly with clickable (it respects touch slop)
             .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = { if (!isDragging) onTap() }
-                )
-            }
-            // Drag handler — separate pointerInput block
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = { isDragging = true },
-                    onDragEnd = { isDragging = false },
-                    onDragCancel = { isDragging = false },
-                    onDrag = { _, dragAmount ->
-                        onDrag(dragAmount.x, dragAmount.y)
-                    }
-                )
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    onDrag(dragAmount.x, dragAmount.y)
+                }
             },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "L",
-            color = Color.White,
-            fontSize = 22.sp,
-            style = MaterialTheme.typography.titleLarge
-        )
+        if (uiState is com.example.lensly.ui.overlay.OverlayUiState.Loading) {
+            androidx.compose.material3.CircularProgressIndicator(
+                color = Color.White,
+                modifier = Modifier.size(24.dp),
+                strokeWidth = 2.dp
+            )
+        } else {
+            Text(
+                text = "L",
+                color = Color.White,
+                fontSize = 22.sp,
+                style = MaterialTheme.typography.titleLarge
+            )
+        }
     }
 }
